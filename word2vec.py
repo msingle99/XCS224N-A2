@@ -3,6 +3,10 @@
 import numpy as np
 import random
 
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(r'C:\Users\msingleton\Documents\GitHub\XCS224N-A2')))
+
 from utils.gradcheck import gradcheck_naive
 from utils.utils import normalizeRows, softmax
 from utils.sanity_checks import *
@@ -18,15 +22,16 @@ def sigmoid(x):
     """
 
     ### YOUR CODE HERE
+    s = 1 / (1 + np.exp(-x))
     ### END YOUR CODE
 
     return s
 
 
 def naiveSoftmaxLossAndGradient(
-        centerWordVec,
+        centerWordVec,      # (3,)
         outsideWordIdx,
-        outsideVectors,
+        outsideVectors,     # (5,3)
         dataset
 ):
     """ Naive Softmax loss & gradient function for word2vec models
@@ -56,9 +61,30 @@ def naiveSoftmaxLossAndGradient(
      but for ease of implementation/programming we usually use row vectors (representing vectors in row form).
     """
 
-    ### YOUR CODE HERE
-    ### END YOUR CODE
+    # Initialize gradient vectors to zero
+    gradCenterVec = np.zeros(centerWordVec.shape)
+    gradOutsideVecs = np.zeros(outsideVectors.shape)
 
+    # Evaulate naive softmax loss function J at current values 
+    # of specified center word vector and outside word vector
+    t = outsideVectors.dot(centerWordVec)
+    u_o = outsideVectors[outsideWordIdx,:]
+    t_o = u_o.dot(centerWordVec)
+    loss = -t_o + np.log(np.sum(np.exp(t)))
+    
+    # Evalute gradient of naive softmax loss function J 
+    # wrt center word vector (dJ/dv_c)
+    y_hat = np.exp(t)/np.sum(np.exp(t))
+    gradCenterVec = -u_o + y_hat.reshape((1, y_hat.shape[0])).dot(outsideVectors).flatten()
+    
+    # Evaluate gradient of naive softmax loss function J 
+    # wrt outside word vectors (dJ/dU)
+    for w in range(y_hat.size):
+        if (w == outsideWordIdx):
+            gradOutsideVecs[w] += (y_hat[w]-1) * centerWordVec
+        else:
+            gradOutsideVecs[w] += y_hat[w] * centerWordVec
+     
     return loss, gradCenterVec, gradOutsideVecs
 
 
@@ -146,6 +172,18 @@ def skipgram(currentCenterWord, windowSize, outsideWords, word2Ind,
     gradOutsideVectors = np.zeros(outsideVectors.shape)
 
     ### YOUR CODE HERE
+    ccw_idx = word2Ind[currentCenterWord]   # Index of current center word
+    for w in outsideWords:
+        lossCurrent, gradc, grado = word2vecLossAndGradient(
+                centerWordVectors[ccw_idx],
+                word2Ind[w],
+                outsideVectors,
+                dataset
+        )
+        
+        loss += lossCurrent
+        gradCenterVecs[ccw_idx] += gradc
+        gradOutsideVectors += grado
     ### END YOUR CODE
 
     return loss, gradCenterVecs, gradOutsideVectors
@@ -179,7 +217,6 @@ def word2vec_sgd_wrapper(word2vecModel, word2Ind, wordVectors, dataset,
 # Testing functions below. DO NOT MODIFY!   #
 #############################################
 
-
 def test_naiveSoftmaxLossAndGradient():
     print("\n\n\t\t\tNaiveSoftmaxLossAndGradient\t\t\t")
 
@@ -205,6 +242,21 @@ def test_naiveSoftmaxLossAndGradient():
             outputs['test_naivesoftmax']['dj_dvc'],
             outputs['test_naivesoftmax']['dj_du']))
 
+def test_negSamplingLossAndGradient():
+    print("\n\n\t\tnegSamplingLossAndGradient\t\t\t")
+
+    dataset, dummy_vectors, dummy_tokens = dummy()
+
+    print("\nYour Result:")
+    loss, dj_dv, dj_du = negSamplingLossAndGradient(
+        inputs['test_naivesoftmax']['centerWordVec'],
+        inputs['test_naivesoftmax']['outsideWordIdx'],
+        inputs['test_naivesoftmax']['outsideVectors'],
+        dataset
+    )
+
+    print(
+        "Loss: {}\nGradient wrt Center Vector (dJ/dV):\n {}\nGradient wrt Outside Vectors (dJ/dU):\n {}\n".format(loss, dj_dv, dj_du))
 
 def test_sigmoid():
     print("\n\n\t\t\ttest sigmoid\t\t\t")
@@ -251,3 +303,4 @@ if __name__ == "__main__":
     test_word2vec()
     test_naiveSoftmaxLossAndGradient()
     test_sigmoid()
+    
